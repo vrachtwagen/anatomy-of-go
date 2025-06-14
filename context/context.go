@@ -110,3 +110,61 @@ func WithCancel(parent Context) (Context, CancelFunc) {
 
 	return child, child.cancel
 }
+
+type timerCtx struct {
+	*cancelCtx
+	deadline time.Time
+	timer    *time.Timer
+}
+
+func (t *timerCtx) Deadline() (deadline time.Time, ok bool) {
+	return t.deadline, true
+}
+
+func (t *timerCtx) cancel() {
+	t.cancelCtx.cancel()
+
+	if t.timer != nil {
+		t.timer.Stop()
+		t.timer = nil
+	}
+}
+
+func WithDeadline(parent Context, d time.Time) (Context, CancelFunc) {
+	if parent == nil {
+		panic("nil parent")
+	}
+
+	if pd, ok := parent.Deadline(); ok && pd.Before(d) {
+		return WithCancel(parent)
+	}
+
+	cctx := &cancelCtx{
+		parent: parent,
+		done:   make(chan struct{}),
+	}
+	tc := &timerCtx{cancelCtx: cctx, deadline: d}
+	go func() {
+		select {
+		case <-parent.Done():
+			tc.cancel()
+		case <-tc.Done():
+			return
+		}
+
+	}()
+
+	dur := time.Until(d)
+	if dur <= 0 {
+		tc.cancel()
+		return tc, tc.cancel
+	}
+
+	tc.timer = time.AfterFunc(dur, tc.cancel)
+
+	return tc, tc.cancel
+}
+
+func WithTimeout(parent Context, timeout time.Duration) (Context, CancelFunc) {
+	return WithDeadline(parent, time.Now().Add(timeout))
+}

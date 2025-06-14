@@ -8,15 +8,12 @@ import (
 )
 
 func main() {
-	fmt.Println(context.Background())
-	fmt.Println(context.TODO())
-
-	ctx, cancel := context.WithCancel(context.Background())
-	go func() {
-		<-ctx.Done()
-		fmt.Println("canceled:", ctx.Err())
-	}()
-	cancel() // your call
-	time.Sleep(time.Duration(10 * time.Millisecond))
-
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	select {
+	case <-ctx.Done():
+		fmt.Println("timed out:", ctx.Err())
+	case <-time.After(100 * time.Millisecond):
+		fmt.Println("didn't time out")
+	}
 }
