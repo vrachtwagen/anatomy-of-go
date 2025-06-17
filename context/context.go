@@ -168,3 +168,82 @@ func WithDeadline(parent Context, d time.Time) (Context, CancelFunc) {
 func WithTimeout(parent Context, timeout time.Duration) (Context, CancelFunc) {
 	return WithDeadline(parent, time.Now().Add(timeout))
 }
+
+type valueCtx struct {
+	parent   Context
+	key, val any
+}
+
+func (c *valueCtx) Deadline() (time.Time, bool) {
+	return c.parent.Deadline()
+}
+
+func (c *valueCtx) Done() <-chan struct{} {
+	return c.parent.Done()
+}
+
+func (c *valueCtx) Err() error {
+	return c.parent.Err()
+}
+
+func (c *valueCtx) String() string {
+	if s, ok := c.parent.(fmt.Stringer); ok {
+		return s.String() + ".WithValue"
+	}
+	return "<unknown>.WithValue"
+}
+
+func (ctx *valueCtx) Value(key any) any {
+	if ctx.key == key {
+		return ctx.val
+	}
+	return ctx.parent.Value(key)
+}
+
+func WithValue(parent Context, key, val any) Context {
+	if parent == nil {
+		panic("nil parent")
+	}
+
+	if key == nil {
+		panic("nil key")
+	}
+	return &valueCtx{parent: parent, key: key, val: val}
+}
+
+type withoutCancelCtx struct {
+	parent Context
+}
+
+func WithoutCancel(parent Context) Context {
+	if parent == nil {
+		panic("no parent")
+	}
+
+	return &withoutCancelCtx{
+		parent: parent,
+	}
+}
+
+func (c *withoutCancelCtx) Deadline() (time.Time, bool) {
+	return time.Time{}, false
+}
+
+func (c *withoutCancelCtx) Done() <-chan struct{} {
+	return nil
+}
+
+func (c *withoutCancelCtx) Err() error {
+	return nil
+}
+
+func (c *withoutCancelCtx) Value(key any) any {
+	return c.parent.Value(key)
+}
+
+func (c *withoutCancelCtx) String() string {
+	if s, ok := c.parent.(fmt.Stringer); ok {
+		return s.String() + ".WithoutCancel"
+	}
+	return "<unknown>.WithoutCancel"
+}
